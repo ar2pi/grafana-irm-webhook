@@ -1,0 +1,8 @@
+fastapi
+mypy
+pydantic
+python-dotenv
+PyYAML
+requests
+RPi.GPIO
+uvicorn

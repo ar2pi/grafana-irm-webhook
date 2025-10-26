@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  grafana-irm-webhook:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - LIGHTBULB_TYPE=${LIGHTBULB_TYPE:-raspberry_pi}
+      - GPIO_PIN=${GPIO_PIN:-18}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - PORT=5000
+      - DEBUG=${DEBUG:-false}
+    command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "5000"]
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
