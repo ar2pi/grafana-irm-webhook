@@ -295,15 +295,19 @@ LED Cathode (-) → Ground (GND)
 # Install dependencies
 sudo apt update && sudo apt upgrade -y
 sudo apt install python3 python3-pip python3-venv -y
-sudo pip3 install RPi.GPIO
-pip3 install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
 # Configure
 cp config.env.example .env
 nano .env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=18
 
 # Run
-python3 -m api.app
+python -m api.app
+
+curl http://localhost:5000/health 
+curl -XPOST http://localhost:5000/webhook/test
 # Or: uvicorn api.app:app --host 0.0.0.0 --port 5000 --reload
 ```
 
