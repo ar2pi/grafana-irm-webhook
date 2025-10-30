@@ -5,4 +5,5 @@ python-dotenv
 PyYAML
 requests
 RPi.GPIO
+types-RPi.GPIO
 uvicorn
