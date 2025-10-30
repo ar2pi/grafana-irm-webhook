@@ -1,17 +1,24 @@
+#!/usr/bin/env python3
+"""
+Test LED on Raspberry Pi 5
+"""
+
 import time
 
-import RPi.GPIO as GPIO
+import gpiod
 
 LED_PIN = 17
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(LED_PIN, GPIO.OUT)
+
+chip = gpiod.Chip("gpiochip4")
+led_line = chip.get_line(LED_PIN)
+led_line.request(consumer="LED", type=gpiod.LINE_REQ_DIR_OUT)
 
 try:
     while True:
-        GPIO.output(LED_PIN, GPIO.HIGH)
+        led_line.set_value(1)
         time.sleep(1)
-        GPIO.output(LED_PIN, GPIO.LOW)
+        led_line.set_value(0)
         time.sleep(1)
 
-except KeyboardInterrupt:
-    GPIO.cleanup()
+finally:
+    led_line.release()

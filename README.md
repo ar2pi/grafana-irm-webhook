@@ -280,7 +280,7 @@ chmod +x setup.sh
 ### Hardware Setup
 
 **Required:**
-- Raspberry Pi (any model with GPIO pins)
+- Raspberry Pi 5 (any model with GPIO pins)
 - LED + 220Ω resistor (optional - can use built-in LED)
 
 **Wiring:**
@@ -381,4 +381,4 @@ docker run -p 5000:5000 -e LIGHTBULB_TYPE=raspberry_pi -e GPIO_PIN=18 grafana-ir
 
 ## @TODO:
 
-[] Use slim image
+[ ] Use slim image
