@@ -127,6 +127,45 @@ class LightbulbController:
             logger.error(f"Error turning off LED: {e}")
             return False
 
+    def blink(self, alert_data: Dict[str, Any]) -> bool:
+        """Blink the LED"""
+        try:
+            self.turn_on(alert_data)
+            time.sleep(1)
+            self.turn_off(alert_data)
+            time.sleep(1)
+            self.turn_on(alert_data)
+            time.sleep(1)
+            self.turn_off(alert_data)
+            return True
+        except Exception as e:
+            logger.error(f"Error blinking LED: {e}")
+            return False
+        return True
+
+    def get_status(self) -> str:
+        """Get the current status of the LED (on/off) by reading the GPIO pin"""
+        try:
+            if self.lightbulb_type == "raspberry_pi":
+                # If GPIO is initialized, read the actual value from hardware
+                if self.gpio_initialized and self.gpio_request is not None and GPIO_AVAILABLE:
+                    try:
+                        # Read the current GPIO pin value from hardware
+                        pin_value = self.gpio_request.get_value(self.gpio_pin)
+                        return "on" if pin_value == Value.ACTIVE else "off"
+                    except Exception as e:
+                        logger.warning(f"Failed to read GPIO value: {e}")
+                        return "error"
+                else:
+                    # GPIO not initialized yet, assume off
+                    return "off"
+            else:
+                logger.error(f"Unsupported lightbulb type: {self.lightbulb_type}")
+                return "unknown"
+        except Exception as e:
+            logger.error(f"Error getting LED status: {e}")
+            return "error"
+
     def _init_gpio(self):
         """Initialize GPIO for Raspberry Pi using gpiod (Pi 5 compatible)"""
         try:
@@ -189,7 +228,8 @@ class LightbulbController:
 
             # The request object will be released when set to None
             # gpiod automatically handles cleanup when the object is deleted
-            del self.gpio_request
+            if self.gpio_request is not None:
+                del self.gpio_request
 
             self.gpio_request = None
             self.gpio_initialized = False
@@ -341,4 +381,48 @@ async def test_webhook():
         raise
     except Exception as e:
         logger.error(f"Error in test webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/led/on")
+async def led_on():
+    """Endpoint to turn on the LED"""
+    try:
+        lightbulb_controller.turn_on({})
+        logger.info(f"LED turned on")
+        return JSONResponse(content={"message": "LED turned on"}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error in turning led on: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/led/off")
+async def led_off():
+    """Endpoint to turn off the LED"""
+    try:
+        lightbulb_controller.turn_off({})
+        logger.info(f"LED turned off")
+        return JSONResponse(content={"message": "LED turned off"}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error in turning led off: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/led/blink")
+async def led_blink():
+    """Endpoint to blink the LED"""
+    try:
+        lightbulb_controller.blink({})
+        logger.info(f"LED blinked")
+        return JSONResponse(content={"message": "LED blinked"}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error in blinking led: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/led/status")
+async def led_status():
+    """Endpoint to get the status of the LED"""
+    try:
+        status = lightbulb_controller.get_status()
+        logger.info(f"LED status: {status}")
+        return JSONResponse(content={"message": "LED status", "status": status}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error in getting led status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

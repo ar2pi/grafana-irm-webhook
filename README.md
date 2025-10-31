@@ -301,11 +301,11 @@ LED Cathode (-) → Ground (GND)
 #   PreferredAuthentications publickey
 
 # Authorize your ssh key
-scp ~/.ssh/id_ed25519.pub <username>@<ip address>:.ssh/authorized_keys
+scp ~/.ssh/id_ed25519.pub <username>@<pi_address>:.ssh/authorized_keys
 # Synchronize folder from rpi to pc 
-rsync -avz --del -e ssh <username>@<ip_address>:grafana-irm-webhook/ .
+rsync -avz --del -e ssh <username>@<pi_address>:grafana-irm-webhook/ .
 # Synchronize folder from pc to rpi 
-rsync -avz --del -e ssh . <username>@<ip_address>:grafana-irm-webhook/
+rsync -avz --del -e ssh . <username>@<pi_address>:grafana-irm-webhook/
 
 # Install dependencies
 sudo apt update && sudo apt upgrade -y
@@ -325,9 +325,15 @@ nano api/.env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=17
 python -m api.app
 # Or: uvicorn api.app:app --host 0.0.0.0 --port 5000 --reload
 
+# Open <pi_address>:5000/docs
+
 # Probe the API
 curl http://localhost:5000/health 
 curl -XPOST http://localhost:5000/webhook/test
+curl -XPOST http://localhost:5000/api/led/on
+curl -XPOST http://localhost:5000/api/led/off
+curl -XPOST http://localhost:5000/api/led/blink
+curl http://localhost:5000/api/led/status
 ```
 
 ### LED Patterns
