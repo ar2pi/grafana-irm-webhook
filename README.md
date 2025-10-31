@@ -1,12 +1,13 @@
-# Grafana IRM Webhook - Raspberry Pi 5 LED Controller
+# Grafana IRM Webhook - Raspberry Pi 5 LED Controller (WIP)
 
 A webhook server that receives alerts from Grafana IRM and controls a Raspberry Pi 5 LED to provide visual alerting. When an alert fires, the LED turns on. When the alert resolves, the LED turns off.
+
+![raspberry pi 5 and led turned on](.media/pi5-led.jpg)
 
 ## Features
 
 - **Grafana IRM Integration**: Receives webhook payloads from Grafana IRM alert groups
 - **Raspberry Pi GPIO Control**: Controls LEDs connected to GPIO pins
-- **Severity-based Visual Alerts**: Different blinking patterns based on alert severity
 - **Alert Resolution**: Automatically turns off LED when alerts are resolved
 - **FastAPI Framework**: Modern, fast, and automatically documented API
 - **Docker Support**: Easy deployment with Docker and Docker Compose
@@ -31,13 +32,18 @@ Edit `.env` file with your settings:
 ```bash
 # Raspberry Pi GPIO Configuration
 LIGHTBULB_TYPE=raspberry_pi
-GPIO_PIN=18
+GPIO_PIN=17
 
 # Webhook Configuration
 WEBHOOK_SECRET=your-webhook-secret
 PORT=5000
 DEBUG=false
 ```
+
+#### Raspberry Pi 5 pinout diagram
+
+See [Raspberry Pi 5 pinout](https://pinout.ai/raspberry-pi-5).
+![raspberry pi 5 pinout diagram](.media/pi-5-gpio-pinout-diagram.webp)
 
 ### 3. Run with Docker Compose
 
@@ -278,7 +284,7 @@ chmod +x setup.sh
 
 **Wiring:**
 ```
-GPIO Pin 18 → 220Ω Resistor → LED Anode (+)
+GPIO Pin 17 → 220Ω Resistor → LED Anode (+)
 LED Cathode (-) → Ground (GND)
 ```
 
@@ -310,7 +316,7 @@ pip install -r requirements.txt
 
 # Configure
 cp api/config.env.example api/.env
-nano api/.env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=18
+nano api/.env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=17
 
 # Test led blink
 ./test_led_blink.py
@@ -379,7 +385,7 @@ uvicorn api.app:app --host 0.0.0.0 --port 5000 --reload
 
 # Or with Docker
 docker build -t grafana-irm-webhook .
-docker run -p 5000:5000 -e LIGHTBULB_TYPE=raspberry_pi -e GPIO_PIN=18 grafana-irm-webhook
+docker run -p 5000:5000 -e LIGHTBULB_TYPE=raspberry_pi -e GPIO_PIN=7 grafana-irm-webhook
 ```
 
 ## Configuration Options
@@ -387,7 +393,7 @@ docker run -p 5000:5000 -e LIGHTBULB_TYPE=raspberry_pi -e GPIO_PIN=18 grafana-ir
 | Environment Variable | Description | Default | Required |
 |---------------------|-------------|---------|----------|
 | `LIGHTBULB_TYPE` | Type of lightbulb (raspberry_pi) | raspberry_pi | No |
-| `GPIO_PIN` | GPIO pin number for Raspberry Pi | 18 | No |
+| `GPIO_PIN` | GPIO pin number for Raspberry Pi | 17 | No |
 | `WEBHOOK_SECRET` | Secret for webhook validation | - | No |
 | `PORT` | Server port | 5000 | No |
 | `DEBUG` | Enable debug mode | false | No |
