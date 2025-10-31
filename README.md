@@ -1,6 +1,6 @@
-# Grafana IRM Webhook - Raspberry Pi LED Controller
+# Grafana IRM Webhook - Raspberry Pi 5 LED Controller
 
-A webhook server that receives alerts from Grafana IRM and controls a Raspberry Pi LED to provide visual alerting. When an alert fires, the LED turns on with blinking patterns based on alert severity. When the alert resolves, the LED turns off.
+A webhook server that receives alerts from Grafana IRM and controls a Raspberry Pi 5 LED to provide visual alerting. When an alert fires, the LED turns on. When the alert resolves, the LED turns off.
 
 ## Features
 
@@ -13,13 +13,6 @@ A webhook server that receives alerts from Grafana IRM and controls a Raspberry 
 - **Health Monitoring**: Built-in health check endpoints
 - **Configurable**: Environment-based configuration for different setups
 - **Auto Documentation**: Interactive API docs at `/docs` and `/redoc`
-
-## Raspberry Pi GPIO LED Control
-
-- Controls LEDs connected to GPIO pins
-- Blinking patterns based on alert severity
-- Perfect for Raspberry Pi setups
-- No external hardware required (uses built-in LED or external LED)
 
 ## Quick Start
 
@@ -292,6 +285,22 @@ LED Cathode (-) → Ground (GND)
 ### Manual Setup (Advanced)
 
 ```bash
+# ssh into the raspberry pi
+# see https://www.raspberrypi.com/documentation/computers/remote-access.html#copy-your-public-key-to-your-raspberry-pi
+
+# rpi host ssh config
+# Host 192.168.178.64
+#   User admin
+#   IdentityFile ~/.ssh/id_ed25519
+#   PreferredAuthentications publickey
+
+# Authorize your ssh key
+scp ~/.ssh/id_ed25519.pub <username>@<ip address>:.ssh/authorized_keys
+# Synchronize folder from rpi to pc 
+rsync -avz --del -e ssh <username>@<ip_address>:grafana-irm-webhook/ .
+# Synchronize folder from pc to rpi 
+rsync -avz --del -e ssh . <username>@<ip_address>:grafana-irm-webhook/
+
 # Install dependencies
 sudo apt update && sudo apt upgrade -y
 sudo apt install python3 python3-pip python3-venv -y
@@ -300,15 +309,19 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Configure
-cp config.env.example .env
-nano .env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=18
+cp api/config.env.example api/.env
+nano api/.env  # Set LIGHTBULB_TYPE=raspberry_pi, GPIO_PIN=18
+
+# Test led blink
+./test_led_blink.py
 
 # Run
 python -m api.app
+# Or: uvicorn api.app:app --host 0.0.0.0 --port 5000 --reload
 
+# Probe the API
 curl http://localhost:5000/health 
 curl -XPOST http://localhost:5000/webhook/test
-# Or: uvicorn api.app:app --host 0.0.0.0 --port 5000 --reload
 ```
 
 ### LED Patterns

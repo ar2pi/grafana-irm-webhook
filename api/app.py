@@ -9,12 +9,15 @@ import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import uvicorn
 
 # Try to import GPIO libraries for Raspberry Pi support (Pi 5 uses gpiod)
 try:
@@ -24,13 +27,18 @@ try:
     GPIO_AVAILABLE = True
 except ImportError:
     GPIO_AVAILABLE = False
-    gpiod = None
-    Direction = None
-    Value = None
+    gpiod = None  # type: ignore
+    Direction = None  # type: ignore
+    Value = None  # type: ignore
 
-# Configure logging
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure logging based on DEBUG environment variable
+debug_mode = os.getenv("DEBUG", "false").lower() == "true"
+log_level = logging.DEBUG if debug_mode else logging.INFO
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -87,13 +95,13 @@ class LightbulbController:
         self.lightbulb_type = config.get("lightbulb_type", "raspberry_pi")
 
         # Raspberry Pi GPIO configuration
-        self.gpio_pin = config.get("gpio_pin", 18)  # Default GPIO pin 18
+        self.gpio_pin = config.get("gpio_pin")  # Default GPIO pin 18
         self.gpio_initialized = False
         self.gpio_request = None  # gpiod request object
 
         # Initialize GPIO if using Raspberry Pi
-        if self.lightbulb_type == "raspberry_pi" and GPIO_AVAILABLE:
-            self._init_gpio()
+        #if self.lightbulb_type == "raspberry_pi" and GPIO_AVAILABLE:
+        #    self._init_gpio()
 
     def turn_on(self, alert_data: Dict[str, Any]) -> bool:
         """Turn on the LED when an alert is received"""
@@ -133,9 +141,7 @@ class LightbulbController:
                 "/dev/gpiochip0",
                 consumer="grafana-irm-webhook",
                 config={
-                    self.gpio_pin: gpiod.LineSettings(
-                        direction=Direction.OUTPUT, output_value=Value.INACTIVE
-                    )
+                    self.gpio_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.ACTIVE)
                 },
             )
             self.gpio_initialized = True
@@ -167,10 +173,6 @@ class LightbulbController:
             value = Value.ACTIVE if state else Value.INACTIVE
             self.gpio_request.set_value(self.gpio_pin, value)
 
-            # For blinking patterns based on severity
-            if state:
-                self._blink_pattern(alert_data)
-
             logger.info(
                 f"Raspberry Pi LED {'turned on' if state else 'turned off'} on pin {self.gpio_pin}"
             )
@@ -180,68 +182,36 @@ class LightbulbController:
             logger.error(f"Failed to control Raspberry Pi LED: {e}")
             return False
 
-    def _blink_pattern(self, alert_data: Dict[str, Any]):
-        """Create blinking pattern based on alert severity"""
-        try:
-            if self.gpio_request is None:
-                logger.error("GPIO request not initialized for blink pattern")
-                return
-
-            severity = alert_data.get("alert_group", {}).get("severity", "warning")
-
-            # Define blink patterns for different severities
-            patterns = {
-                "critical": (0.1, 0.1, 5),  # Fast blink: 100ms on, 100ms off, 5 times
-                "high": (0.2, 0.2, 3),  # Medium blink: 200ms on, 200ms off, 3 times
-                "warning": (0.5, 0.5, 2),  # Slow blink: 500ms on, 500ms off, 2 times
-                "info": (1.0, 0.5, 1),  # Single long blink: 1s on, 0.5s off, 1 time
-                "low": (0.3, 0.3, 1),  # Single short blink: 300ms on, 300ms off, 1 time
-            }
-
-            on_time, off_time, repeats = patterns.get(severity.lower(), (0.5, 0.5, 2))
-
-            # Perform the blinking pattern
-            for _ in range(repeats):
-                self.gpio_request.set_value(self.gpio_pin, Value.ACTIVE)
-                time.sleep(on_time)
-                self.gpio_request.set_value(self.gpio_pin, Value.INACTIVE)
-                if _ < repeats - 1:  # Don't sleep after the last blink
-                    time.sleep(off_time)
-
-            # Keep LED on after pattern
-            self.gpio_request.set_value(self.gpio_pin, Value.ACTIVE)
-
-        except Exception as e:
-            logger.error(f"Error in blink pattern: {e}")
-
     def cleanup_gpio(self):
         """Clean up GPIO resources"""
         try:
-            if self.gpio_request is not None:
-                # Turn off LED before cleanup
-                try:
-                    self.gpio_request.set_value(self.gpio_pin, Value.INACTIVE)
-                except Exception:
-                    pass
-                # Release the gpiod request
-                try:
-                    # The request object will be released when set to None
-                    # gpiod automatically handles cleanup when the object is deleted
-                    del self.gpio_request
-                except Exception:
-                    pass
-                self.gpio_request = None
-                self.gpio_initialized = False
-                logger.info("GPIO cleaned up")
+            self._control_raspberry_pi_light(False, {})
+
+            # The request object will be released when set to None
+            # gpiod automatically handles cleanup when the object is deleted
+            del self.gpio_request
+
+            self.gpio_request = None
+            self.gpio_initialized = False
+
+            logger.info("GPIO cleaned up")
         except Exception as e:
             logger.error(f"Error cleaning up GPIO: {e}")
 
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from environment variables or config file"""
+
+    logger.info(f"DEBUG: {debug_mode}")
+    logger.info(f"LOG_LEVEL: {log_level}")
+    logger.info(f"LIGHTBULB_TYPE: {os.getenv('LIGHTBULB_TYPE')}")
+    logger.info(f"GPIO_PIN: {os.getenv('GPIO_PIN')}")
+    logger.info(f"WEBHOOK_SECRET: {os.getenv('WEBHOOK_SECRET')}")
+    logger.info(f"PORT: {os.getenv('PORT')}")
+
     config = {
         "lightbulb_type": os.getenv("LIGHTBULB_TYPE", "raspberry_pi"),
-        "gpio_pin": int(os.getenv("GPIO_PIN", "18")),
+        "gpio_pin": int(os.getenv("GPIO_PIN", "17")),
         "webhook_secret": os.getenv("WEBHOOK_SECRET"),
         "port": int(os.getenv("PORT", 5000)),
         "debug": os.getenv("DEBUG", "false").lower() == "true",
@@ -254,10 +224,24 @@ def load_config() -> Dict[str, Any]:
 config = load_config()
 lightbulb_controller = LightbulbController(config)
 
-# Add cleanup handler for GPIO
-import atexit
+if __name__ == "__main__":
+    logger.info(f"Starting Grafana IRM Webhook Server on port {config['port']}")
+    logger.info(f"Lightbulb type: {config['lightbulb_type']}")
 
-atexit.register(lightbulb_controller.cleanup_gpio)
+    try:
+        uvicorn.run(
+            "api.app:app",
+            host="0.0.0.0",
+            port=config["port"],
+            reload=config["debug"],
+            log_level="info",
+        )
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        lightbulb_controller.cleanup_gpio()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -358,18 +342,3 @@ async def test_webhook():
     except Exception as e:
         logger.error(f"Error in test webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    logger.info(f"Starting Grafana IRM Webhook Server on port {config['port']}")
-    logger.info(f"Lightbulb type: {config['lightbulb_type']}")
-
-    uvicorn.run(
-        "api.app:app",
-        host="0.0.0.0",
-        port=config["port"],
-        reload=config["debug"],
-        log_level="info",
-    )
