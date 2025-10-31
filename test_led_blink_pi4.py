@@ -8,7 +8,9 @@ import time
 import RPi.GPIO as GPIO
 
 LED_PIN = 17
-GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+# GPIO.setmode(GPIO.BCM)
+GPIO.setmode(GPIO.BOARD)
 GPIO.setup(LED_PIN, GPIO.OUT)
 
 try:
