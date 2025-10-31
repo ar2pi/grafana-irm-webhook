@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
+import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import uvicorn
 
 # Try to import GPIO libraries for Raspberry Pi support (Pi 5 uses gpiod)
 try:
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Grafana IRM Webhook Server",
-    description="Receives alerts from Grafana IRM and controls a smart lightbulb",
+    description="Receives alerts from Grafana IRM and controls a Raspberry Pi 5 LED",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -100,7 +100,7 @@ class LightbulbController:
         self.gpio_request = None  # gpiod request object
 
         # Initialize GPIO if using Raspberry Pi
-        #if self.lightbulb_type == "raspberry_pi" and GPIO_AVAILABLE:
+        # if self.lightbulb_type == "raspberry_pi" and GPIO_AVAILABLE:
         #    self._init_gpio()
 
     def turn_on(self, alert_data: Dict[str, Any]) -> bool:
@@ -148,7 +148,11 @@ class LightbulbController:
         try:
             if self.lightbulb_type == "raspberry_pi":
                 # If GPIO is initialized, read the actual value from hardware
-                if self.gpio_initialized and self.gpio_request is not None and GPIO_AVAILABLE:
+                if (
+                    self.gpio_initialized
+                    and self.gpio_request is not None
+                    and GPIO_AVAILABLE
+                ):
                     try:
                         # Read the current GPIO pin value from hardware
                         pin_value = self.gpio_request.get_value(self.gpio_pin)
@@ -180,7 +184,9 @@ class LightbulbController:
                 "/dev/gpiochip0",
                 consumer="grafana-irm-webhook",
                 config={
-                    self.gpio_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.ACTIVE)
+                    self.gpio_pin: gpiod.LineSettings(
+                        direction=Direction.OUTPUT, output_value=Value.ACTIVE
+                    )
                 },
             )
             self.gpio_initialized = True
@@ -383,8 +389,9 @@ async def test_webhook():
         logger.error(f"Error in test webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/led/on")
-async def led_on():
+async def led_on(response_model=JSONResponse):
     """Endpoint to turn on the LED"""
     try:
         lightbulb_controller.turn_on({})
@@ -394,8 +401,9 @@ async def led_on():
         logger.error(f"Error in turning led on: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/led/off")
-async def led_off():
+async def led_off(response_model=JSONResponse):
     """Endpoint to turn off the LED"""
     try:
         lightbulb_controller.turn_off({})
@@ -405,8 +413,9 @@ async def led_off():
         logger.error(f"Error in turning led off: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/led/blink")
-async def led_blink():
+async def led_blink(response_model=JSONResponse):
     """Endpoint to blink the LED"""
     try:
         lightbulb_controller.blink({})
@@ -416,13 +425,16 @@ async def led_blink():
         logger.error(f"Error in blinking led: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/led/status")
-async def led_status():
+async def led_status(response_model=JSONResponse):
     """Endpoint to get the status of the LED"""
     try:
         status = lightbulb_controller.get_status()
         logger.info(f"LED status: {status}")
-        return JSONResponse(content={"message": "LED status", "status": status}, status_code=200)
+        return JSONResponse(
+            content={"message": "LED status", "status": status}, status_code=200
+        )
     except Exception as e:
         logger.error(f"Error in getting led status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
