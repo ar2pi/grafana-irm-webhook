@@ -16,14 +16,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# Try to import GPIO libraries for Raspberry Pi support
+# Try to import GPIO libraries for Raspberry Pi support (Pi 5 uses gpiod)
 try:
-    import RPi.GPIO as GPIO
+    import gpiod
+    from gpiod.line import Direction, Value
 
     GPIO_AVAILABLE = True
 except ImportError:
     GPIO_AVAILABLE = False
-    GPIO = None
+    gpiod = None
+    Direction = None
+    Value = None
 
 # Configure logging
 logging.basicConfig(
@@ -86,6 +89,7 @@ class LightbulbController:
         # Raspberry Pi GPIO configuration
         self.gpio_pin = config.get("gpio_pin", 18)  # Default GPIO pin 18
         self.gpio_initialized = False
+        self.gpio_request = None  # gpiod request object
 
         # Initialize GPIO if using Raspberry Pi
         if self.lightbulb_type == "raspberry_pi" and GPIO_AVAILABLE:
@@ -116,39 +120,52 @@ class LightbulbController:
             return False
 
     def _init_gpio(self):
-        """Initialize GPIO for Raspberry Pi"""
+        """Initialize GPIO for Raspberry Pi using gpiod (Pi 5 compatible)"""
         try:
             if not GPIO_AVAILABLE:
                 logger.error(
-                    "RPi.GPIO library not available. Install with: pip install RPi.GPIO"
+                    "gpiod library not available. Install with: pip install gpiod"
                 )
                 return False
 
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.gpio_pin, GPIO.OUT)
-            GPIO.output(self.gpio_pin, GPIO.LOW)  # Start with LED off
+            # Create gpiod request for the GPIO pin
+            self.gpio_request = gpiod.request_lines(
+                "/dev/gpiochip0",
+                consumer="grafana-irm-webhook",
+                config={
+                    self.gpio_pin: gpiod.LineSettings(
+                        direction=Direction.OUTPUT, output_value=Value.INACTIVE
+                    )
+                },
+            )
             self.gpio_initialized = True
-            logger.info(f"GPIO initialized on pin {self.gpio_pin}")
+            logger.info(f"GPIO initialized on pin {self.gpio_pin} using gpiod")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize GPIO: {e}")
+            self.gpio_initialized = False
             return False
 
     def _control_raspberry_pi_light(
         self, state: bool, alert_data: Dict[str, Any]
     ) -> bool:
-        """Control Raspberry Pi GPIO LED"""
+        """Control Raspberry Pi GPIO LED using gpiod"""
         try:
             if not GPIO_AVAILABLE:
-                logger.error("RPi.GPIO library not available")
+                logger.error("gpiod library not available")
                 return False
 
             if not self.gpio_initialized:
                 if not self._init_gpio():
                     return False
 
+            if self.gpio_request is None:
+                logger.error("GPIO request not initialized")
+                return False
+
             # Control the LED
-            GPIO.output(self.gpio_pin, GPIO.HIGH if state else GPIO.LOW)
+            value = Value.ACTIVE if state else Value.INACTIVE
+            self.gpio_request.set_value(self.gpio_pin, value)
 
             # For blinking patterns based on severity
             if state:
@@ -166,6 +183,10 @@ class LightbulbController:
     def _blink_pattern(self, alert_data: Dict[str, Any]):
         """Create blinking pattern based on alert severity"""
         try:
+            if self.gpio_request is None:
+                logger.error("GPIO request not initialized for blink pattern")
+                return
+
             severity = alert_data.get("alert_group", {}).get("severity", "warning")
 
             # Define blink patterns for different severities
@@ -181,14 +202,14 @@ class LightbulbController:
 
             # Perform the blinking pattern
             for _ in range(repeats):
-                GPIO.output(self.gpio_pin, GPIO.HIGH)
+                self.gpio_request.set_value(self.gpio_pin, Value.ACTIVE)
                 time.sleep(on_time)
-                GPIO.output(self.gpio_pin, GPIO.LOW)
+                self.gpio_request.set_value(self.gpio_pin, Value.INACTIVE)
                 if _ < repeats - 1:  # Don't sleep after the last blink
                     time.sleep(off_time)
 
             # Keep LED on after pattern
-            GPIO.output(self.gpio_pin, GPIO.HIGH)
+            self.gpio_request.set_value(self.gpio_pin, Value.ACTIVE)
 
         except Exception as e:
             logger.error(f"Error in blink pattern: {e}")
@@ -196,8 +217,20 @@ class LightbulbController:
     def cleanup_gpio(self):
         """Clean up GPIO resources"""
         try:
-            if GPIO_AVAILABLE and self.gpio_initialized:
-                GPIO.cleanup()
+            if self.gpio_request is not None:
+                # Turn off LED before cleanup
+                try:
+                    self.gpio_request.set_value(self.gpio_pin, Value.INACTIVE)
+                except Exception:
+                    pass
+                # Release the gpiod request
+                try:
+                    # The request object will be released when set to None
+                    # gpiod automatically handles cleanup when the object is deleted
+                    del self.gpio_request
+                except Exception:
+                    pass
+                self.gpio_request = None
                 self.gpio_initialized = False
                 logger.info("GPIO cleaned up")
         except Exception as e:

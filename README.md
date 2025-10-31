@@ -381,4 +381,5 @@ docker run -p 5000:5000 -e LIGHTBULB_TYPE=raspberry_pi -e GPIO_PIN=18 grafana-ir
 
 ## @TODO:
 
-[ ] Use slim image
+- [ ] Use slim image
+- [ ] Dev container
