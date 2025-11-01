@@ -73,7 +73,7 @@ install_packages() {
     sudo apt install -y python3 python3-pip python3-venv python3-dev
 
     print_status "Installing system dependencies..."
-    sudo apt install -y git curl build-essential wget jq
+    sudo apt install -y git curl jq
 
     print_success "Packages installed successfully"
 }
@@ -93,8 +93,8 @@ enable_gpio() {
 install_python_deps() {
     print_header "Installing Python Dependencies"
 
-    print_status "Installing RPi.GPIO library..."
-    sudo pip3 install RPi.GPIO
+    python3 -m venv .venv
+    source .venv/bin/activate
 
     print_status "Installing other dependencies..."
     pip3 install -r requirements.txt
@@ -106,24 +106,24 @@ install_python_deps() {
 configure_environment() {
     print_header "Configuring Environment"
 
-    if [ ! -f ".env" ]; then
-        print_status "Creating .env file from template..."
-        cp config.env.example .env
-        print_success ".env file created"
+    if [ ! -f "api/.env" ]; then
+        print_status "Creating api/.env file from template..."
+        cp api/config.env.example api/.env
+        print_success "api/.env file created"
     else
-        print_warning ".env file already exists, skipping creation"
+        print_warning "api/.env file already exists, skipping creation"
     fi
 
     print_status "Current configuration:"
     print_status "  LIGHTBULB_TYPE=raspberry_pi"
-    print_status "  GPIO_PIN=18"
+    print_status "  GPIO_PIN=17"
     print_status "  PORT=5000"
     print_status "  DEBUG=false"
 
-    read -p "Edit .env file now? (y/N): " -n 1 -r
+    read -p "Edit api/.env file now? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        nano .env
+        nano api/.env
     fi
 }
 
@@ -131,48 +131,13 @@ configure_environment() {
 test_gpio() {
     print_header "Testing GPIO Functionality"
 
-    print_status "Testing GPIO pin access..."
-
-    # Create a simple GPIO test script
-    cat > test_gpio.py << 'EOF'
-#!/usr/bin/env python3
-import RPi.GPIO as GPIO
-import time
-
-try:
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(18, GPIO.OUT)
-
-    print("Testing GPIO pin 18...")
-    for i in range(3):
-        GPIO.output(18, GPIO.HIGH)
-        print("LED ON")
-        time.sleep(0.5)
-        GPIO.output(18, GPIO.LOW)
-        print("LED OFF")
-        time.sleep(0.5)
-
-    print("GPIO test successful!")
-
-except Exception as e:
-    print(f"GPIO test failed: {e}")
-    exit(1)
-finally:
-    GPIO.cleanup()
-EOF
-
-    chmod +x test_gpio.py
-
     print_status "Running GPIO test..."
-    if python3 test_gpio.py; then
+    if python3 test_led_blink.py; then
         print_success "GPIO test passed"
     else
         print_error "GPIO test failed"
         print_warning "Make sure you have proper permissions and GPIO is enabled"
     fi
-
-    # Clean up test file
-    rm test_gpio.py
 }
 
 # Install ngrok
